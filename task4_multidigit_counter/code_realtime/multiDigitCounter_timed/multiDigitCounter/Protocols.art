@@ -1,0 +1,8 @@
+protocol IncProtocol{
+    out inc();
+};
+
+protocol DigitPrinterProtocol{
+    in requestDigit();
+    out respondDigit(`int`);
+};

@@ -1,0 +1,17 @@
+protocol IncProtocol{
+    out inc();
+};
+
+protocol DigitPrinterProtocol{
+    in requestDigit();
+    out respondDigit(`int`);
+    in inc();
+};
+
+protocol TopMainProtocol{
+    in requestNewDigit(); out requestNewDigit();
+};
+
+protocol MainGuiProtocol{
+    in togglePlay();
+};

@@ -1,0 +1,155 @@
+capsule GuiCap{
+
+    [[rt::header_preface]]
+    `
+        #ifndef MAXNUMCELLS
+        #define MAXNUMCELLS 1000
+        #endif
+
+        #include <vector>
+
+        class Gui;
+    `
+
+    [[rt::impl_preface]]
+    `
+        #include "Gui.h"
+        #include <SFML/Window/Event.hpp>
+    `
+
+    [[rt::decl]]
+    `
+        public:
+            GuiCap(RTController*, RTActorRef*, unsigned int fps, unsigned int windowWidth, unsigned int windowHeight, int numColumns, int numRows);
+        private:
+            RTTimespec _tickPeriod;
+            unsigned int _windowWidth;
+            unsigned int _windowHeight;
+            Gui* _gui;
+            bool _isEndEvent;
+            int _numColumns;
+            int _numRows;
+            bool _displayNeighborCounters;
+    `
+
+    [[rt::impl]]
+    `
+        GuiCap::GuiCap(RTController* rtg_rts, RTActorRef* rtg_ref, unsigned int fps, unsigned int windowWidth, unsigned int windowHeight, int numColumns, int numRows)
+        : RTActor(rtg_rts, rtg_ref)
+        , _tickPeriod{RTTimespec(0,1000000000/fps)}
+        , _windowWidth{windowWidth}
+        , _windowHeight{windowHeight}
+        , _isEndEvent{false}
+        , _numColumns{numColumns}
+        , _numRows{numRows}
+        , _displayNeighborCounters{true}{}
+    `
+
+    behavior port timer : Timing;
+
+    service behavior port mainPort~ : MainGuiProtocol;
+
+    service behavior port cellPorts : GuiCellProtocol[`MAXNUMCELLS`];
+
+    statemachine{
+        state Running{
+            on cellPorts.cellStatus
+            `
+                int index = (*getMsg()).sapIndex0();
+                bool isAlive = *((bool*) rtdata);
+                int x = index % _numColumns;
+                int y = index / _numColumns;
+                if(isAlive){
+                    _gui->setCellColor(x, y, 0, 0, 0);
+                    _gui->setCellTextColor(x, y, 255, 255, 255);
+                }
+                else{
+                    _gui->setCellColor(x, y, 255, 255, 255);
+                    _gui->setCellTextColor(x, y, 0, 0, 0);
+                }
+            `;
+            on cellPorts.numNeighbors
+            `
+                int index = (*getMsg()).sapIndex0();
+                int numNeighbors = *((int*) rtdata);
+                int x = index % _numColumns;
+                int y = index / _numColumns;
+                _gui->setCellText(x ,y ,std::to_string(numNeighbors));
+            `;
+        };
+        initial ->Running
+        `
+            _gui = new Gui{_windowWidth, _windowHeight, "Neighbor Counter"};
+            _gui->createCells(_numColumns, _numRows);
+            _gui->setCellsOutlineColor(127,127,127);
+            _gui->setCellsOutlineThickness(2.f);
+            _gui->createCellTextBoxes();
+            for(int y = 0; y < _numRows; y++){
+                for(int x = 0; x < _numColumns; x++){
+                    _gui->setCellColor(x,y,255,255,255);
+                    _gui->setCellText(x,y,"0");
+                    _gui->setCellTextColor(x,y,0,0,0);
+                }
+            }
+            timer.informEvery(_tickPeriod);
+        `;
+        
+        choice evaluateWindowEvents;
+        Running->evaluateWindowEvents on timer.timeout
+        `
+            sf::Event event;
+            while(_gui->pollEvent(event)){
+                switch(event.type){
+                    case sf::Event::Closed:
+                        _isEndEvent = true;
+                        goto endloop;
+                    case sf::Event::MouseButtonReleased:
+                    {
+                        int x = _gui->getCellColumn(event.mouseButton.x);
+                        int y = _gui->getCellRow(event.mouseButton.y);
+                        int cellPos = y*_numColumns + x;
+                        cellPorts.toggleCell().sendAt(cellPos);
+                        break;
+                    }
+                    case sf::Event::KeyPressed:
+                        if(event.key.scancode == sf::Keyboard::Scan::P){
+                            mainPort.togglePlay().send();
+                        }
+                        else if(event.key.scancode == sf::Keyboard::Scan::Space){
+                            for(int i = 0; i < _numColumns*_numRows; i++){
+                                cellPorts.toggleCell().sendAt(i);
+                            }
+                        }
+                        else if(event.key.scancode == sf::Keyboard::Scan::N){
+                            if(_displayNeighborCounters){
+                                _displayNeighborCounters = false;
+                                _gui->hideCellText();
+                            }
+                            else{
+                                _displayNeighborCounters = true;
+                                _gui->showCellText();
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            endloop: (void)0;
+        `;
+
+        evaluateWindowEvents->End when`_isEndEvent`;
+
+        evaluateWindowEvents->Running when`else`
+        `
+            _gui->draw();
+        `;
+
+        state End{
+            entry
+            `
+                context()->abort();
+            `;
+        };
+    };
+};

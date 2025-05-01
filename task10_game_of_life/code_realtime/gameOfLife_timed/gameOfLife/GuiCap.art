@@ -1,0 +1,249 @@
+capsule GuiCap{
+
+    [[rt::header_preface]]
+    `
+        #ifndef MAXNUMCELLS
+        #define MAXNUMCELLS 10000
+        #endif
+
+        #include <vector>
+        #include <chrono>
+
+        class Gui;
+    `
+
+    [[rt::impl_preface]]
+    `
+        #include "Gui.h"
+        #include <SFML/Window/Event.hpp>
+
+        #include <iostream>
+        #include <fstream>
+    `
+
+    [[rt::decl]]
+    `
+        public:
+            GuiCap(RTController*, RTActorRef*, unsigned int fps, unsigned int windowWidth, unsigned int windowHeight, int numColumns, int numRows);
+        private:
+            void setup(std::string filename);
+
+            RTTimespec _tickPeriod;
+            unsigned int _windowWidth;
+            unsigned int _windowHeight;
+            Gui* _gui;
+            bool _isEndEvent;
+            int _numColumns;
+            int _numRows;
+            bool _displayNeighborCounters;
+
+            std::chrono::steady_clock::time_point _startTime;
+            std::chrono::steady_clock::time_point _endTime;
+            bool _startTimeSet{false};
+            int _numResponses;
+            int _gameState{0};
+            int _numGameStates;
+            int _numResponsesWanted[3];
+            int _numCellConnections{0};
+    `
+
+    [[rt::impl]]
+    `
+        GuiCap::GuiCap(RTController* rtg_rts, RTActorRef* rtg_ref, unsigned int fps, unsigned int windowWidth, unsigned int windowHeight, int numColumns, int numRows)
+        : RTActor(rtg_rts, rtg_ref)
+        , _tickPeriod{RTTimespec(0,1000000000/fps)}
+        , _windowWidth{windowWidth}
+        , _windowHeight{windowHeight}
+        , _isEndEvent{false}
+        , _numColumns{numColumns}
+        , _numRows{numRows}
+        , _displayNeighborCounters{false}{}
+
+        void GuiCap::setup(std::string filename){
+            std::ifstream in{filename};
+            if(!in.good()){
+                std::cout << "Failed to read file: " << filename << std::endl;
+                return;
+            }
+
+            int x{0};
+            int y{0};
+            char c;
+            while(in.get(c)){
+
+                if(c == 'O'){
+                    int cellPos = y*_numColumns + x;
+                    if(cellPos < MAXNUMCELLS){
+                        cellPorts.toggleCell().sendAt(cellPos);
+                    }
+                }
+
+                if(c == '\n'){
+                    x = 0;
+                    y++;
+                }
+                else{
+                    x++;
+                }
+            }
+        }
+
+    `
+
+    behavior port timer : Timing;
+
+    service behavior port mainPort~ : MainGuiProtocol;
+
+    service notify behavior port cellPorts : GuiCellProtocol[`MAXNUMCELLS`];
+
+    statemachine{
+
+        state Disconnected;
+
+        choice isAllConnected;
+
+        initial->Disconnected;
+        Disconnected->isAllConnected on cellPorts.rtBound
+        `
+            _numCellConnections++;
+        `;
+
+        isAllConnected->Running when `_numCellConnections == MAXNUMCELLS`
+        `
+            _gui = new Gui{_windowWidth, _windowHeight, "Game of Life"};
+            _gui->createCells(_numColumns, _numRows);
+            _gui->setCellsOutlineColor(127,127,127);
+            _gui->setCellsOutlineThickness(1.f);
+            _gui->createCellTextBoxes();
+            for(int y = 0; y < _numRows; y++){
+                for(int x = 0; x < _numColumns; x++){
+                    _gui->setCellColor(x,y,255,255,255);
+                    _gui->setCellText(x,y,"0");
+                    _gui->setCellTextColor(x,y,0,0,0);
+                }
+            }
+            if(!_displayNeighborCounters){
+                _gui->hideCellText();
+            }
+
+            setup("..\\..\\gameOfLife\\setup3.cells");
+            _numGameStates = 3;
+            _numResponsesWanted[0] = 7724;
+            _numResponsesWanted[1] = 5824;
+            _numResponsesWanted[2] = 6720;
+
+            timer.informEvery(_tickPeriod);
+        `;
+        isAllConnected->Disconnected when `else`;
+
+        state Running{
+            on cellPorts.cellStatus
+            `
+                int index = (*getMsg()).sapIndex0();
+                bool isAlive = *((bool*) rtdata);
+                int x = index % _numColumns;
+                int y = index / _numColumns;
+                if(isAlive){
+                    _gui->setCellColor(x, y, 0, 0, 0);
+                    _gui->setCellTextColor(x, y, 255, 255, 255);
+                }
+                else{
+                    _gui->setCellColor(x, y, 255, 255, 255);
+                    _gui->setCellTextColor(x, y, 0, 0, 0);
+                }
+            `;
+            on cellPorts.numNeighbors
+            `
+                int index = (*getMsg()).sapIndex0();
+                int numNeighbors = *((int*) rtdata);
+                int x = index % _numColumns;
+                int y = index / _numColumns;
+                _gui->setCellText(x ,y ,std::to_string(numNeighbors));
+
+                if(_startTimeSet){
+                    _numResponses++;
+                    
+                    if(_numResponses >= _numResponsesWanted[_gameState]){
+                        _endTime = std::chrono::steady_clock::now();
+                        auto nSecDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(_endTime-_startTime).count();
+                        std::cout << "Time: " << nSecDuration << "ns" << std::endl;
+
+                        std::ofstream out;
+                        std::string filename{"..\\..\\gameOfLife\\results"};
+                        filename.push_back('A'+_gameState);
+                        filename.append(".txt");
+                        out.open(filename, std::ios::app);
+                        out << nSecDuration << "\n";
+                        out.close();
+
+                        _gameState = (_gameState+1)%_numGameStates;
+                        _startTimeSet = false;
+                    }
+                }
+            `;
+        };
+        
+        choice evaluateWindowEvents;
+        Running->evaluateWindowEvents on timer.timeout
+        `
+            sf::Event event;
+            while(_gui->pollEvent(event)){
+                switch(event.type){
+                    case sf::Event::Closed:
+                        _isEndEvent = true;
+                        goto endloop;
+                    case sf::Event::MouseButtonReleased:
+                    {
+                        int x = _gui->getCellColumn(event.mouseButton.x);
+                        int y = _gui->getCellRow(event.mouseButton.y);
+                        int cellPos = y*_numColumns + x;
+                        cellPorts.toggleCell().sendAt(cellPos);
+                        break;
+                    }
+                    case sf::Event::KeyPressed:
+                        if(event.key.scancode == sf::Keyboard::Scan::P){
+                            mainPort.togglePlay().send();
+                        }
+                        else if(event.key.scancode == sf::Keyboard::Scan::Space){
+
+                            _numResponses = 0;
+                            _startTimeSet = true;
+                            _startTime = std::chrono::steady_clock::now();
+
+                            for(int i = 0; i < _numColumns*_numRows; i++){
+                                cellPorts.tick().sendAt(i);
+                            }
+                        }
+                        else if(event.key.scancode == sf::Keyboard::Scan::N){
+                            if(_displayNeighborCounters){
+                                _displayNeighborCounters = false;
+                                _gui->hideCellText();
+                            }
+                            else{
+                                _displayNeighborCounters = true;
+                                _gui->showCellText();
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            endloop: (void)0;
+        `;
+
+        evaluateWindowEvents->End when`_isEndEvent`;
+
+        evaluateWindowEvents->Running when`else`
+        `
+            _gui->draw();
+        `;
+
+        state End{
+            entry
+            `
+                context()->abort();
+            `;
+        };
+    };
+};

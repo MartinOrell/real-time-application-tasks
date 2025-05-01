@@ -1,0 +1,18 @@
+capsule Main{
+
+    [[rt::impl_preface]]
+    `
+        #include <iostream>
+    `
+
+    statemachine{
+        initial ->Hello;
+        state Hello{
+            entry
+            `
+                std::cout << "Hello World!" << std::endl;
+                context()->abort();
+            `;
+        };
+    };
+};

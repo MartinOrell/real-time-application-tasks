@@ -1,0 +1,52 @@
+capsule Top{
+
+    [[rt::header_preface]]
+    `
+        #define WINDOWWIDTH 800
+        #define WINDOWHEIGHT 500
+        #define FPS 30
+        #define TICKRATE 1
+        #define NUMCOLUMNS 100
+        #define NUMROWS 100
+        #define MAXNUMCELLS 10000
+    `
+
+    part main : Main [[rt::create]]
+    `
+        return new Main(rtg_rts, rtg_ref, TICKRATE);
+    `;
+
+    part gui : GuiCap [[rt::create]]
+    `
+        return new GuiCap(rtg_rts, rtg_ref, FPS, WINDOWWIDTH, WINDOWHEIGHT, NUMCOLUMNS, NUMROWS);
+    `;
+
+    optional part cells : Cell[`MAXNUMCELLS`];
+
+    connect main.cellPorts with cells.mainPort;
+    connect gui.cellPorts with cells.guiPort;
+    connect main.guiPort with gui.mainPort;
+
+    behavior port frame : Frame;
+
+    statemachine{
+        state Running;
+        initial->Running
+        `
+            for(int y = 0; y < NUMROWS; y++){
+                for(int x = 0; x < NUMCOLUMNS; x++){
+                    RTActorId rId = frame.incarnateCustom
+                    (
+                        cells,
+                        RTActorFactory(
+                            [this](RTController* rtg_rts, RTActorRef* rtg_ref, int index)
+                            {
+                                return new Cell(rtg_rts, rtg_ref);
+                            }
+                        )
+                    );
+                }
+            }
+        `;
+    };
+};

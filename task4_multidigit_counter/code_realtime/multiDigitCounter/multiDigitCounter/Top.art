@@ -1,0 +1,29 @@
+capsule Top{
+
+    part main : Main [[rt::create]]
+    `
+        RTTimespec tickInterval = RTTimespec(0,660000);
+        return new Main(rtg_rts, rtg_ref, tickInterval);
+    `;
+
+    part printer : Printer [[rt::create]]
+    `
+        RTTimespec tickInterval = RTTimespec(1,0);
+        return new Printer(rtg_rts, rtg_ref, tickInterval);
+    `;
+
+    part digit1 : Digit;
+    part digit2 : Digit;
+    part digit3 : Digit;
+
+    connect digit1.printerPort with printer.digit1Port;
+    connect digit2.printerPort with printer.digit2Port;
+    connect digit3.printerPort with printer.digit3Port;
+
+    //incPorts are unwired and connected programmatically
+
+    statemachine{
+        state State;
+        initial->State;
+    };
+};

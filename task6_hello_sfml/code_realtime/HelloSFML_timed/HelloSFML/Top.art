@@ -1,0 +1,15 @@
+capsule Top{
+
+    part main : Main [[rt::create]]
+    `
+        unsigned int fps = 1000;
+        unsigned int windowWidth = 800;
+        unsigned int windowHeight = 500;
+        return new Main(rtg_rts, rtg_ref, fps,windowWidth,windowHeight);
+    `;
+
+    statemachine{
+        state State;
+        initial->State;
+    };
+};

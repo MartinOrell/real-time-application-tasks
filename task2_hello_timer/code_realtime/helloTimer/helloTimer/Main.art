@@ -1,0 +1,28 @@
+capsule Main{
+
+    [[rt::impl_preface]]
+    `
+        #include <iostream>
+    `
+
+    behavior port timer : Timing;
+
+    statemachine{
+        initial ->Waiting;
+        state Waiting{
+            entry
+            `
+                timer.informIn(RTTimespec(5,0));
+                std::cout << "Hello World!" << std::endl;
+            `;
+        };
+        Waiting->End on timer.timeout;
+        state End{
+            entry
+            `
+                std::cout << "Goodbye World!" << std::endl;
+                context()->abort();
+            `;
+        };
+    };
+};

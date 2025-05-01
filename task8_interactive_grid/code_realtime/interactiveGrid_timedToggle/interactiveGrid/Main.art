@@ -1,0 +1,62 @@
+capsule Main{
+
+    [[rt::header_preface]]
+    `
+        #ifndef MAXNUMCELLS
+        #define MAXNUMCELLS 100
+        #endif
+    `
+
+    [[rt::decl]]
+    `
+        public:
+            Main(RTController*, RTActorRef*, unsigned int tickRate);
+        private:
+            RTTimespec _tickPeriod;
+            RTTimerId _timerId;
+    `
+
+    [[rt::impl]]
+    `
+        Main::Main(RTController* rtg_rts, RTActorRef* rtg_ref, unsigned int tickRate)
+        : RTActor(rtg_rts, rtg_ref)
+        , _tickPeriod{RTTimespec(0,1000000000/tickRate)}{}
+    `
+
+    behavior port timer : Timing;
+
+    service behavior port guiPort : MainGuiProtocol;
+
+    service behavior port cellPorts : MainCellProtocol[`MAXNUMCELLS`];
+
+    statemachine{
+        
+        initial ->Paused;
+
+        state Paused;
+
+        Paused->Running on guiPort.togglePlay
+        `
+            _timerId = timer.informEvery(_tickPeriod);
+        `;
+
+        Running->Paused on guiPort.togglePlay
+        `
+            timer.cancelTimer(_timerId);
+        `;
+
+        Running->Running on timer.timeout;
+
+        state Running{
+            entry
+            `
+                int i = 0;
+                while(cellPorts.isBoundAt(i)){
+                    cellPorts.toggleCell().sendAt(i);
+                    i++;
+                }
+            `;
+        };
+        
+    };
+};

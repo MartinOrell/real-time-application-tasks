@@ -1,0 +1,9 @@
+*.vscode
+*.backup
+*_target*
+*build/
+*.exe
+*.o
+*.d
+*.svg
+*results*.txt

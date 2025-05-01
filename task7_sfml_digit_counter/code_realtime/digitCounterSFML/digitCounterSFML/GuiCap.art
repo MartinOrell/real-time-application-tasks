@@ -1,0 +1,132 @@
+capsule GuiCap{
+
+    [[rt::header_preface]]
+    `
+        #include <vector>
+
+        class Gui;
+    `
+
+    [[rt::impl_preface]]
+    `
+        #include "Gui.h"
+        #include <SFML/Window/Event.hpp>
+    `
+
+    [[rt::decl]]
+    `
+        public:
+            GuiCap(RTController*, RTActorRef*, unsigned int fps, unsigned int windowWidth, unsigned int windowHeight);
+        private:
+            RTTimespec _tickPeriod;
+            unsigned int _windowWidth;
+            unsigned int _windowHeight;
+            Gui* _gui;
+            bool _isEndEvent;
+            std::vector<int> _digitValues;
+            int _numRequests;
+            int _numResponses;
+    `
+
+    [[rt::impl]]
+    `
+        GuiCap::GuiCap(RTController* rtg_rts, RTActorRef* rtg_ref, unsigned int fps, unsigned int windowWidth, unsigned int windowHeight)
+        : RTActor(rtg_rts, rtg_ref)
+        , _tickPeriod{RTTimespec(0,1000000000/fps)}
+        , _windowWidth{windowWidth}
+        , _windowHeight{windowHeight}
+        , _isEndEvent{false}{}
+    `
+
+    behavior port timer : Timing;
+
+    service behavior port mainPort~ : MainGuiProtocol;
+
+    service notify behavior port digitPorts~ : DigitPrinterProtocol[100];
+
+    statemachine{
+        state Running{
+            on digitPorts.rtBound
+            `
+                _digitValues.push_back(0);
+            `;
+        };
+        initial ->Running
+        `
+            _gui = new Gui{_windowWidth, _windowHeight, "Counter"};
+            _gui->createMiddleText();
+            _gui->setMiddleText("0");
+            timer.informEvery(_tickPeriod);
+        `;
+        
+        choice evaluateWindowEvents;
+        Running->evaluateWindowEvents on timer.timeout
+        `
+            sf::Event event;
+            while(_gui->pollEvent(event)){
+                switch(event.type){
+                    case sf::Event::Closed:
+                        _isEndEvent = true;
+                        goto endloop;
+                    case sf::Event::KeyPressed:
+                        if(event.key.scancode == sf::Keyboard::Scan::P){
+                            mainPort.togglePlay().send();
+                        }
+                        else if(event.key.scancode == sf::Keyboard::Scan::Space){
+                            digitPorts.inc().sendAt(0);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            endloop: (void)0;
+        `;
+
+        evaluateWindowEvents->End when`_isEndEvent`;
+
+        evaluateWindowEvents->Receiving when`else`
+        `
+            _numResponses = 0;
+            _numRequests = _digitValues.size();
+            for(int i = 0; i < _numRequests; i++){
+                digitPorts.requestDigit().sendAt(i);
+            }
+        `;
+
+        state Receiving{
+            on digitPorts.rtBound
+            `
+                _digitValues.push_back(0);
+            `;
+            on timer.timeout;
+        };
+        choice isAllReceived;
+
+        storeDigit: Receiving->isAllReceived on digitPorts.respondDigit
+        `
+            int index = (*getMsg()).sapIndex0();
+            _digitValues.at(index) = *((int*) rtdata);
+            _numResponses++;
+        `;
+
+        yes: isAllReceived->Running when `_numResponses >= _numRequests`
+        `
+            std::string text;
+            for(int i = _digitValues.size()-1; i >= 0; i--){
+                text.push_back('0' + _digitValues.at(i));
+            }
+            _gui->setMiddleText(text);
+            _gui->draw();
+        `;
+        no: isAllReceived->Receiving when `else`;
+
+
+        state End{
+            entry
+            `
+                context()->abort();
+            `;
+        };
+    };
+};

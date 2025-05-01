@@ -1,0 +1,176 @@
+capsule Cell{
+
+    [[rt::header_preface]]
+    `
+        #include "Protocols.art.h"
+    `
+
+    [[rt::decl]]
+    `
+        public:
+            Cell(RTController*, RTActorRef*, int xPos, int yPos);
+            void sendCellStatusMessages(const bool isAlive);
+        private:
+            std::string _subscribeNeighborRegName[4];
+            std::string _publishNeighborRegName;
+            int _currentNumNeighbors;
+            int _nextNumNeighbors;
+            bool _sync;
+    `
+
+    [[rt::impl]]
+    `
+        Cell::Cell(RTController* rtg_rts, RTActorRef* rtg_ref, int xPos, int yPos)
+        : RTActor(rtg_rts, rtg_ref)
+        , _currentNumNeighbors{0}
+        , _nextNumNeighbors{0}
+        , _sync{false}{
+            _publishNeighborRegName = "Cell_" + std::to_string(xPos) + "_" + std::to_string(yPos);
+            _subscribeNeighborRegName[0] = "Cell_" + std::to_string(xPos+1) + "_" + std::to_string(yPos);
+            _subscribeNeighborRegName[1] = "Cell_" + std::to_string(xPos-1) + "_" + std::to_string(yPos+1);
+            _subscribeNeighborRegName[2] = "Cell_" + std::to_string(xPos) + "_" + std::to_string(yPos+1);
+            _subscribeNeighborRegName[3] = "Cell_" + std::to_string(xPos+1) + "_" + std::to_string(yPos+1);
+        }
+
+        void Cell::sendCellStatusMessages(const bool isAlive){
+            guiPort.cellStatus(isAlive).send();
+            CellStatusMessage cellMessage;
+            cellMessage.isAlive = isAlive;
+            cellMessage.sync = _sync;
+            for(int i = 0; i < 4; i++){
+                if(pub_neighborPort.isBoundAt(i)){
+                    pub_neighborPort.cellStatus(cellMessage).sendAt(i);
+                }
+            }
+            if(sub_neighborPort1.isBoundAt(0)){
+                sub_neighborPort1.cellStatus(cellMessage).sendAt(0);
+            }
+            if(sub_neighborPort2.isBoundAt(0)){
+                sub_neighborPort2.cellStatus(cellMessage).sendAt(0);
+            }
+            if(sub_neighborPort3.isBoundAt(0)){
+                sub_neighborPort3.cellStatus(cellMessage).sendAt(0);
+            }
+            if(sub_neighborPort4.isBoundAt(0)){
+                sub_neighborPort4.cellStatus(cellMessage).sendAt(0);
+            }
+        }
+    `
+
+    service behavior port mainPort~ : MainCellProtocol;
+
+    service behavior port guiPort~ : GuiCellProtocol;
+
+    service behavior unwired port pub_neighborPort
+    [[rt::properties(
+        registration=application
+    )]] : NeighborProtocol[4];
+
+    service behavior unwired port sub_neighborPort1~
+     [[rt::properties(
+        registration=application
+    )]] : NeighborProtocol;
+
+    service behavior unwired port sub_neighborPort2~
+     [[rt::properties(
+        registration=application
+    )]] : NeighborProtocol;
+
+    service behavior unwired port sub_neighborPort3~
+     [[rt::properties(
+        registration=application
+    )]] : NeighborProtocol;
+
+    service behavior unwired port sub_neighborPort4~
+     [[rt::properties(
+        registration=application
+    )]] : NeighborProtocol;
+
+    statemachine{
+
+        state Alive{
+            on pub_neighborPort.cellStatus, sub_neighborPort1.cellStatus, sub_neighborPort2.cellStatus, sub_neighborPort3.cellStatus, sub_neighborPort4.cellStatus
+            `
+                CellStatusMessage cellMessage = *((CellStatusMessage*) rtdata);
+                if(cellMessage.isAlive){
+                    if(cellMessage.sync == _sync){
+                        _currentNumNeighbors++;
+                    }
+                    _nextNumNeighbors++;
+                }
+                else{
+                    if(cellMessage.sync == _sync){
+                        _currentNumNeighbors--;
+                    }
+                    _nextNumNeighbors--;
+                }
+                guiPort.numNeighbors(_nextNumNeighbors).send();
+            `;
+        };
+
+        state Dead{
+            on pub_neighborPort.cellStatus, sub_neighborPort1.cellStatus, sub_neighborPort2.cellStatus, sub_neighborPort3.cellStatus, sub_neighborPort4.cellStatus
+            `
+                CellStatusMessage cellMessage = *((CellStatusMessage*) rtdata);
+                if(cellMessage.isAlive){
+                    if(cellMessage.sync == _sync){
+                        _currentNumNeighbors++;
+                    }
+                    _nextNumNeighbors++;
+                }
+                else{
+                    if(cellMessage.sync == _sync){
+                        _currentNumNeighbors--;
+                    }
+                    _nextNumNeighbors--;
+                }
+                guiPort.numNeighbors(_nextNumNeighbors).send();
+            `;
+        };
+
+        initial->Dead
+        `
+            pub_neighborPort.registerSPP(_publishNeighborRegName.c_str());
+            sub_neighborPort1.registerSAP(_subscribeNeighborRegName[0].c_str());
+            sub_neighborPort2.registerSAP(_subscribeNeighborRegName[1].c_str());
+            sub_neighborPort3.registerSAP(_subscribeNeighborRegName[2].c_str());
+            sub_neighborPort4.registerSAP(_subscribeNeighborRegName[3].c_str());
+        `;
+
+        choice is3Neighbors, is2or3Neighbors;
+
+        yesD: is3Neighbors->Alive when `_currentNumNeighbors == 3`
+        `
+            sendCellStatusMessages(true);
+        `;
+        noD: is3Neighbors->Dead when `else`;
+
+        yesA: is2or3Neighbors->Alive when `_currentNumNeighbors == 2 || _currentNumNeighbors == 3`;
+        noA: is2or3Neighbors->Dead when `else`
+        `
+            sendCellStatusMessages(false);
+        `;
+
+        tickD: Dead->is3Neighbors on mainPort.tick, guiPort.tick
+        `
+            _sync = !_sync;
+            _currentNumNeighbors = _nextNumNeighbors;
+        `;
+
+        tickA: Alive->is2or3Neighbors on mainPort.tick, guiPort.tick
+        `
+            _sync = !_sync;
+            _currentNumNeighbors = _nextNumNeighbors;
+        `;
+
+        toggleA: Dead->Alive on guiPort.toggleCell
+        `
+            sendCellStatusMessages(true);
+        `;
+        
+        toggleD: Alive->Dead on guiPort.toggleCell
+        `
+            sendCellStatusMessages(false);
+        `;
+    };
+};

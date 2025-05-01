@@ -1,0 +1,77 @@
+capsule Printer{
+
+    [[rt::impl_preface]]
+    `
+        #include <iostream>
+    `
+
+    [[rt::decl]]
+    `
+        public:
+            Printer(RTController*, RTActorRef*, RTTimespec);
+        private:
+            RTTimespec _tickInterval;
+            int _digit1Value;
+            int _digit2Value;
+            int _digit3Value;
+            int _numRequests;
+            int _numResponses;
+    `
+
+    [[rt::impl]]
+    `
+        Printer::Printer(RTController* rtg_rts, RTActorRef* rtg_ref,  RTTimespec tickInterval)
+            :RTActor(rtg_rts, rtg_ref), _tickInterval{tickInterval}{}
+    `
+
+    behavior port timer : Timing;
+
+    service behavior port digit1Port~ : DigitPrinterProtocol;
+    service behavior port digit2Port~ : DigitPrinterProtocol;
+    service behavior port digit3Port~ : DigitPrinterProtocol;
+
+    statemachine{
+        state Running, Receiving;
+        choice isAllReceived;
+
+        initial ->Running
+        `
+            timer.informEvery(_tickInterval);
+        `;
+        
+        requestDigits: Running->Receiving on timer.timeout
+        `
+            _numResponses = 0;
+            _numRequests = 3;
+            digit1Port.requestDigit().send();
+            digit2Port.requestDigit().send();
+            digit3Port.requestDigit().send();
+        `;
+
+        storeDigit1: Receiving->isAllReceived on digit1Port.respondDigit
+        `
+            _digit1Value = *((int*) rtdata);
+            _numResponses++;
+        `;
+
+        storeDigit2: Receiving->isAllReceived on digit2Port.respondDigit
+        `
+            _digit2Value = *((int*) rtdata);
+            _numResponses++;
+        `;
+
+        storeDigit3: Receiving->isAllReceived on digit3Port.respondDigit
+        `
+            _digit3Value = *((int*) rtdata);
+            _numResponses++;
+        `;
+
+        
+        yes: isAllReceived->Running when `_numResponses >= _numRequests`
+        `
+            std::cout << _digit3Value << _digit2Value << _digit1Value << " ";
+        `;
+        no: isAllReceived->Receiving when `else`;
+
+    };
+};

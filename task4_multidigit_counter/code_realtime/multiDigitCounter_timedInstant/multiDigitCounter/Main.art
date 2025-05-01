@@ -1,0 +1,50 @@
+capsule Main{
+
+    [[rt::decl]]
+    `
+        public:
+            Main(RTController*, RTActorRef*, RTTimespec);
+        private:
+            RTTimespec _tickInterval;
+    `
+
+    [[rt::impl]]
+    `
+        Main::Main(RTController* rtg_rts, RTActorRef* rtg_ref, RTTimespec tickInterval)
+            :RTActor(rtg_rts, rtg_ref), _tickInterval{tickInterval}{}
+    `
+
+    behavior port timerOut : InstantTimerProtocol, timerIn~ : InstantTimerProtocol;
+    connect timerIn with timerOut;
+
+    service notify behavior unwired port digit1Port
+    [[rt::properties(
+        registration=application
+    )]]: IncProtocol;
+
+    statemachine{
+        initial ->Disconnected;
+
+        state Disconnected{
+            entry
+            `
+                digit1Port.registerSAP("digit1");
+            `;
+        };
+
+        Disconnected ->Running on digit1Port.rtBound
+        `
+            timerOut.instantTimeout().send();
+        `;
+        state Running{
+            entry
+            `
+                digit1Port.inc().send();
+            `;
+        };
+        Running->Running on timerIn.instantTimeout
+        `
+            timerOut.instantTimeout().send();
+        `;
+    };
+};

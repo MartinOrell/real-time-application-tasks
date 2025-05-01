@@ -1,0 +1,42 @@
+capsule Main{
+
+    [[rt::header_preface]]
+    `
+        #include <chrono>
+    `
+
+    [[rt::impl_preface]]
+    `
+        #include <iostream>
+        #include <fstream>
+    `
+
+    [[rt::decl]]
+    `
+        private:
+            std::chrono::steady_clock::time_point _startTime;
+            std::chrono::steady_clock::time_point _endTime;
+    `
+
+    statemachine{
+        initial ->Hello
+        `
+            _startTime = std::chrono::steady_clock::now();
+        `;
+        state Hello{
+            entry
+            `
+                std::cout << "Hello World!" << std::endl;
+                _endTime = std::chrono::steady_clock::now();
+                auto nSecDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(_endTime-_startTime).count();
+                std::cout << "Time: " << nSecDuration << "ns" << std::endl;
+
+                std::ofstream out;
+                std::string fileName = "..\\..\\helloWorld\\results.txt";
+                out.open(fileName, std::ios::app);
+                out << nSecDuration << std::endl;
+                context()->abort();
+            `;
+        };
+    };
+};

@@ -1,0 +1,95 @@
+capsule Main{
+
+    [[rt::header_preface]]
+    `
+        class Gui;
+        #include <chrono>
+    `
+
+    [[rt::impl_preface]]
+    `
+        #include "Gui.h"
+        #include <SFML/Window/Event.hpp>
+        #include <fstream>
+    `
+
+    [[rt::decl]]
+    `
+        public:
+            Main(RTController*, RTActorRef*, unsigned int fps, unsigned int windowWidth, unsigned int windowHeight);
+        private:
+            RTTimespec _tickPeriod;
+            unsigned int _windowWidth;
+            unsigned int _windowHeight;
+            Gui* _gui;
+            bool _isEndEvent;
+
+            std::chrono::steady_clock::time_point _startTime;
+            std::chrono::steady_clock::time_point _endTime;
+            int _numCycles{0};
+    `
+
+    [[rt::impl]]
+    `
+        Main::Main(RTController* rtg_rts, RTActorRef* rtg_ref, unsigned int fps, unsigned int windowWidth, unsigned int windowHeight)
+        : RTActor(rtg_rts, rtg_ref)
+        , _tickPeriod{RTTimespec(0,1000000000/fps)}
+        , _windowWidth{windowWidth}
+        , _windowHeight{windowHeight}
+        , _isEndEvent{false}{}
+    `
+
+    behavior port timer : Timing;
+
+    statemachine{
+        state Running;
+        initial ->Running
+        `
+            _gui = new Gui{_windowWidth, _windowHeight, "Hello SFML"};
+            _gui->createMiddleText();
+            _gui->setMiddleText("Hello SFML");
+            timer.informEvery(_tickPeriod);
+        `;
+        
+        choice evaluateWindowEvents;
+        Running->evaluateWindowEvents on timer.timeout
+        `
+            _startTime = std::chrono::steady_clock::now();
+            sf::Event event;
+            while(_gui->pollEvent(event)){
+                if(event.type == sf::Event::Closed){
+                    _isEndEvent = true;
+                    break;
+                }
+            }
+        `;
+
+        evaluateWindowEvents->End when`_isEndEvent`;
+
+        evaluateWindowEvents->Running when`else`
+        `
+            _gui->draw();
+
+            _endTime = std::chrono::steady_clock::now();
+            auto nSecDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(_endTime-_startTime).count();
+
+            std::ofstream out;
+            std::string fileName = "..\\..\\HelloSFML\\results.txt";
+            out.open(fileName, std::ios::app);
+            out << nSecDuration << std::endl;
+            out.close();
+
+            _numCycles++;
+            if(_numCycles >= 1001){
+                context()->abort();
+            }
+        `;
+
+        state End{
+            entry
+            `
+                context()->abort();
+            `;
+        };
+    };
+};

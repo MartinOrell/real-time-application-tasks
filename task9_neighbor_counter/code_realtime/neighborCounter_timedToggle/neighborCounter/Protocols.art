@@ -1,0 +1,17 @@
+protocol MainGuiProtocol{
+    in togglePlay();
+};
+
+protocol MainCellProtocol{
+    out toggleCell();
+};
+
+protocol GuiCellProtocol{
+    out toggleCell();
+    in cellStatus(`bool`);
+    in numNeighbors(`int`);
+};
+
+protocol NeighborProtocol{
+    in cellStatus(`bool`); out cellStatus(`bool`);
+};

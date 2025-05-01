@@ -1,0 +1,15 @@
+let tc = TCF.define(TCF.CPP_TRANSFORM);
+tc.topCapsule = 'Top'
+tc.cppCodeStandard ="C++ 20";
+tc.userLibraries = [
+    "../../SFML/build/_deps/sfml-build/lib/libsfml-audio.a",
+    "../../SFML/build/_deps/sfml-build/lib/libsfml-graphics.a",
+    "../../SFML/build/_deps/sfml-build/lib/libsfml-main.a",
+    "../../SFML/build/_deps/sfml-build/lib/libsfml-network.a",
+    "../../SFML/build/_deps/sfml-build/lib/libsfml-system.a",
+    "../../SFML/build/_deps/sfml-build/lib/libsfml-window.a"
+];
+tc.inclusionPaths = [
+    "../../SFML/build/_deps/sfml-src/include"
+]
+tc.makeCommand = 'cp -R -Force ../../SFML/build/bin/*  .; make; cp -R -Force ../../res .';

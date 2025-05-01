@@ -1,0 +1,30 @@
+[[rt::decl]]
+`
+    struct [[rt::auto_descriptor]] CellStatusMessage{
+        bool isAlive;
+        bool sync;
+    };
+`
+
+protocol MainGuiProtocol{
+    in togglePlay();
+};
+
+protocol MainCellProtocol{
+    out tick();
+};
+
+protocol GuiCellProtocol{
+    out toggleCell();
+    out tick();
+    in cellStatus(`bool`);
+    in numNeighbors(`int`);
+};
+
+protocol NeighborProtocol{
+    [[rt::header_preface]]
+    `
+        #include "Protocols.art.h"
+    `
+    in cellStatus(`CellStatusMessage`); out cellStatus(`CellStatusMessage`);
+};

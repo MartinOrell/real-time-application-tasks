@@ -1,0 +1,157 @@
+capsule Main{
+
+    [[rt::header_preface]]
+    `
+        #include <chrono>
+    `
+
+    [[rt::impl_preface]]
+    `
+        #include <iostream>
+        #include <fstream>
+    `
+
+    [[rt::decl]]
+    `
+        public:
+            Main(RTController*, RTActorRef*, RTTimespec);
+        private:
+            RTTimespec _tickInterval;
+
+            std::chrono::steady_clock::time_point _startTime;
+            std::chrono::steady_clock::time_point _endTime;
+            int _numCycles{0};
+    `
+
+    [[rt::impl]]
+    `
+        Main::Main(RTController* rtg_rts, RTActorRef* rtg_ref, RTTimespec tickInterval)
+        : RTActor(rtg_rts, rtg_ref)
+        , _tickInterval{tickInterval}{}
+    `
+
+    behavior port timerOut : InstantTimerProtocol, timerIn~ : InstantTimerProtocol;
+    connect timerIn with timerOut;
+
+    statemachine{
+        initial ->Zero
+        `
+            timerOut.instantTimeout().send();
+        `;
+        state Zero{
+            entry
+            `
+                _startTime = std::chrono::steady_clock::now();
+                std::cout << "0";
+            `;
+        };
+        state One{
+            entry
+            `
+                std::cout << "1";
+            `;
+        };
+        state Two{
+            entry
+            `
+                std::cout << "2";
+            `;
+        };
+        state Three{
+            entry
+            `
+                std::cout << "3";
+            `;
+        };
+        state Four{
+            entry
+            `
+                std::cout << "4";
+            `;
+        };
+        state Five{
+            entry
+            `
+                std::cout << "5";
+            `;
+        };
+        state Six{
+            entry
+            `
+                std::cout << "6";
+            `;
+        };
+        state Seven{
+            entry
+            `
+                std::cout << "7";
+            `;
+        };
+        state Eight{
+            entry
+            `
+                std::cout << "8";
+            `;
+        };
+        state Nine{
+            entry
+            `
+                std::cout << "9";
+            `;
+        };
+        Zero->One on timerIn.instantTimeout
+        `
+            timerOut.instantTimeout().send();
+        `;
+        One->Two on timerIn.instantTimeout
+        `
+            timerOut.instantTimeout().send();
+        `;
+        Two->Three on timerIn.instantTimeout
+        `
+            timerOut.instantTimeout().send();
+        `;
+        Three->Four on timerIn.instantTimeout
+        `
+            timerOut.instantTimeout().send();
+        `;
+        Four->Five on timerIn.instantTimeout
+        `
+            timerOut.instantTimeout().send();
+        `;
+        Five->Six on timerIn.instantTimeout
+        `
+            timerOut.instantTimeout().send();
+        `;
+        Six->Seven on timerIn.instantTimeout
+        `
+            timerOut.instantTimeout().send();
+        `;
+        Seven->Eight on timerIn.instantTimeout
+        `
+            timerOut.instantTimeout().send();
+        `;
+        Eight->Nine on timerIn.instantTimeout
+        `
+            timerOut.instantTimeout().send();
+        `;
+        Nine->Zero on timerIn.instantTimeout
+        `
+            _endTime = std::chrono::steady_clock::now();
+            auto nSecDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(_endTime-_startTime).count();
+            std::cout << "Time: " << nSecDuration << "ns" << std::endl;
+
+            std::ofstream out;
+            std::string fileName = "..\\..\\digitCounter\\results.txt";
+            out.open(fileName, std::ios::app);
+            out << nSecDuration << std::endl;
+            out.close();
+
+            _numCycles++;
+            if(_numCycles >= 1000){
+                context()->abort();
+            }
+            timerOut.instantTimeout().send();
+        `;
+    };
+};

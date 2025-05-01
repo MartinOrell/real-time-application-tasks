@@ -1,0 +1,23 @@
+capsule Cell{
+
+    service behavior port mainPort~ : MainCellProtocol;
+
+    service behavior port guiPort~ : GuiCellProtocol;
+
+    statemachine{
+
+        state Alive, Dead;
+
+        initial->Dead;
+
+        Dead->Alive on mainPort.toggleCell, guiPort.toggleCell
+        `
+            guiPort.cellStatus(false).send();
+        `;
+        
+        Alive->Dead on mainPort.toggleCell, guiPort.toggleCell
+        `
+            guiPort.cellStatus(true).send();
+        `;
+    };
+};

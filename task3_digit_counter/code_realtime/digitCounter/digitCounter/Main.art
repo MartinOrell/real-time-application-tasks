@@ -1,0 +1,101 @@
+capsule Main{
+
+    [[rt::impl_preface]]
+    `
+        #include <iostream>
+    `
+
+    [[rt::decl]]
+    `
+        public:
+            Main(RTController*, RTActorRef*, RTTimespec);
+        private:
+            RTTimespec _tickInterval;
+    `
+
+    [[rt::impl]]
+    `
+        Main::Main(RTController* rtg_rts, RTActorRef* rtg_ref, RTTimespec tickInterval)
+        : RTActor(rtg_rts, rtg_ref)
+        , _tickInterval{tickInterval}{}
+    `
+
+    behavior port timer : Timing;
+
+    statemachine{
+        initial ->Zero
+        `
+            timer.informEvery(_tickInterval);
+        `;
+        state Zero{
+            entry
+            `
+                std::cout << "0";
+            `;
+        };
+        state One{
+            entry
+            `
+                std::cout << "1";
+            `;
+        };
+        state Two{
+            entry
+            `
+                std::cout << "2";
+            `;
+        };
+        state Three{
+            entry
+            `
+                std::cout << "3";
+            `;
+        };
+        state Four{
+            entry
+            `
+                std::cout << "4";
+            `;
+        };
+        state Five{
+            entry
+            `
+                std::cout << "5";
+            `;
+        };
+        state Six{
+            entry
+            `
+                std::cout << "6";
+            `;
+        };
+        state Seven{
+            entry
+            `
+                std::cout << "7";
+            `;
+        };
+        state Eight{
+            entry
+            `
+                std::cout << "8";
+            `;
+        };
+        state Nine{
+            entry
+            `
+                std::cout << "9";
+            `;
+        };
+        Zero->One on timer.timeout;
+        One->Two on timer.timeout;
+        Two->Three on timer.timeout;
+        Three->Four on timer.timeout;
+        Four->Five on timer.timeout;
+        Five->Six on timer.timeout;
+        Six->Seven on timer.timeout;
+        Seven->Eight on timer.timeout;
+        Eight->Nine on timer.timeout;
+        Nine->Zero on timer.timeout;
+    };
+};

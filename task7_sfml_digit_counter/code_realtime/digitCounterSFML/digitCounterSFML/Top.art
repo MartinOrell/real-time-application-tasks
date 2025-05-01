@@ -1,0 +1,64 @@
+capsule Top{
+
+    part main : Main [[rt::create]]
+    `
+        RTTimespec tickPeriod = RTTimespec(0,7000000);
+        return new Main(rtg_rts, rtg_ref, tickPeriod);
+    `;
+
+    part gui : GuiCap [[rt::create]]
+    `
+        unsigned int fps = 30;
+        unsigned int windowWidth = 800;
+        unsigned int windowHeight = 500;
+        return new GuiCap(rtg_rts, rtg_ref, fps, windowWidth, windowHeight);
+    `;
+
+    optional part digits : Digit[100];
+
+    connect main.guiPort with gui.mainPort;
+
+    connect gui.digitPorts with digits.printerPort;
+
+    //incPorts are unwired and connected programmatically
+
+    service behavior port digitPorts : TopMainProtocol[100];
+
+    connect digitPorts with digits.topPort;
+
+    behavior port frame : Frame;
+
+    statemachine{
+        initial->Running
+        `
+            RTActorId id = frame.incarnateCustom
+            (
+                digits,
+                RTActorFactory(
+                    [this](RTController* rtg_rts, RTActorRef* rtg_ref, int index)
+                    {
+                        return new Digit(rtg_rts, rtg_ref, 0);
+                    }
+                )
+            );
+        `;
+        state Running{
+            on digitPorts.requestNewDigit
+            `
+                RTActorId id = frame.incarnateCustom
+                (
+                    digits,
+                    RTActorFactory(
+                        [this](RTController* rtg_rts, RTActorRef* rtg_ref, int index)
+                        {
+                            return new Digit(rtg_rts, rtg_ref, 1);
+                        }
+                    )
+                );
+                if(!id.isValid()){
+                    //Failed to incarnate digit
+                }
+            `;
+        };
+    };
+};

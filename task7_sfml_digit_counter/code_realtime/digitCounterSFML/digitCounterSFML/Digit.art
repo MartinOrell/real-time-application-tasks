@@ -1,0 +1,127 @@
+capsule Digit{
+
+    [[rt::decl]]
+    `
+        public:
+            Digit(RTController*, RTActorRef*, int);
+        private:
+            std::string _incRegName;
+            std::string _overflowRegName;
+            int _startValue;
+    `
+
+    [[rt::impl]]
+    `
+        Digit::Digit(RTController* rtg_rts, RTActorRef* rtg_ref, int startValue)
+        : RTActor(rtg_rts, rtg_ref)
+        , _startValue{startValue}{}
+    `
+
+    service behavior unwired port incPort~
+    [[rt::properties(
+        registration=application
+    )]]: IncProtocol;
+    service behavior unwired port overflowPort
+    [[rt::properties(
+        registration=application
+    )]]  : IncProtocol;
+
+    service behavior port printerPort : DigitPrinterProtocol;
+
+    service behavior port topPort : TopMainProtocol;
+
+    statemachine{
+
+        initial->chooseStartValue
+        `
+            _incRegName = getName() + std::to_string(getIndex());
+            _overflowRegName = getName() + std::to_string(getIndex()+1);
+            incPort.registerSPP(_incRegName.c_str());
+        `;
+
+        choice chooseStartValue;
+
+        chooseStartValue->Zero when `_startValue == 0`;
+        chooseStartValue->One when `else`;
+
+        state Zero{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(0).send();
+            `;
+        };
+        state One{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(1).send();
+            `;
+        };
+        state Two{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(2).send();
+            `;
+        };
+        state Three{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(3).send();
+            `;
+        };
+        state Four{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(4).send();
+            `;
+        };
+        state Five{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(5).send();
+            `;
+        };
+        state Six{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(6).send();
+            `;
+        };
+        state Seven{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(7).send();
+            `;
+        };
+        state Eight{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(8).send();
+            `;
+        };
+        state Nine{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(9).send();
+            `;
+        };
+        Zero->One on incPort.inc, printerPort.inc;
+        One->Two on incPort.inc, printerPort.inc;
+        Two->Three on incPort.inc, printerPort.inc;
+        Three->Four on incPort.inc, printerPort.inc;
+        Four->Five on incPort.inc, printerPort.inc;
+        Five->Six on incPort.inc, printerPort.inc;
+        Six->Seven on incPort.inc, printerPort.inc;
+        Seven->Eight on incPort.inc, printerPort.inc;
+        Eight->Nine on incPort.inc, printerPort.inc;
+        overflow: Nine->Zero on incPort.inc, printerPort.inc
+        `
+            if(!overflowPort.isBoundAt(0)){
+                topPort.requestNewDigit().send();
+                overflowPort.registerSAP(_overflowRegName.c_str());
+            }
+            else{
+                overflowPort.inc().send();
+            }
+        `;
+    };
+};

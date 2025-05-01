@@ -1,0 +1,147 @@
+capsule Digit{
+
+    [[rt::header_preface]]
+    `
+        #include <chrono>
+    `
+
+    [[rt::impl_preface]]
+    `
+        #include <fstream>
+    `
+
+    [[rt::decl]]
+    `
+        public:
+            Digit(RTController*, RTActorRef*);
+        private:
+            std::string _incRegName;
+            std::string _overflowRegName;
+
+            std::chrono::steady_clock::time_point _startTime;
+            std::chrono::steady_clock::time_point _endTime;
+            int _numCycles{0};
+    `
+
+    [[rt::impl]]
+    `
+        Digit::Digit(RTController* rtg_rts, RTActorRef* rtg_ref)
+        : RTActor(rtg_rts, rtg_ref){
+            _incRegName = getName(); //example: digit1
+            _overflowRegName = getName();
+            _overflowRegName.back()++; //example: digit2
+        }
+    `
+
+    service behavior unwired port incPort~
+    [[rt::properties(
+        registration=application
+    )]] : IncProtocol;
+    service behavior unwired port overflowPort
+    [[rt::properties(
+        registration=application
+    )]] : IncProtocol;
+    service behavior port printerPort : DigitPrinterProtocol;
+
+    statemachine{
+
+        initial->Zero
+        `
+            incPort.registerSPP(_incRegName.c_str());
+            overflowPort.registerSAP(_overflowRegName.c_str());
+            _startTime = std::chrono::steady_clock::now();
+        `;
+
+        state Zero{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(0).send();
+            `;
+        };
+        state One{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(1).send();
+            `;
+        };
+        state Two{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(2).send();
+            `;
+        };
+        state Three{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(3).send();
+            `;
+        };
+        state Four{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(4).send();
+            `;
+        };
+        state Five{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(5).send();
+            `;
+        };
+        state Six{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(6).send();
+            `;
+        };
+        state Seven{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(7).send();
+            `;
+        };
+        state Eight{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(8).send();
+            `;
+        };
+        state Nine{
+            on printerPort.requestDigit
+            `
+                printerPort.respondDigit(9).send();
+            `;
+        };
+        Zero->One on incPort.inc;
+        One->Two on incPort.inc;
+        Two->Three on incPort.inc;
+        Three->Four on incPort.inc;
+        Four->Five on incPort.inc;
+        Five->Six on incPort.inc;
+        Six->Seven on incPort.inc;
+        Seven->Eight on incPort.inc;
+        Eight->Nine on incPort.inc;
+        overflow: Nine->Zero on incPort.inc
+        `
+            if(overflowPort.isBoundAt(0)){
+                overflowPort.inc().send();
+            }
+            else{
+                _endTime = std::chrono::steady_clock::now();
+                auto nSecDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(_endTime-_startTime).count();
+
+                std::ofstream out;
+                std::string fileName = "..\\..\\multiDigitCounter\\results.txt";
+                out.open(fileName, std::ios::app);
+                out << nSecDuration << std::endl;
+                out.close();
+
+                _numCycles++;
+                if(_numCycles >= 900){
+                    context()->abort();
+                }
+                _startTime = std::chrono::steady_clock::now();
+            }
+        `;
+    };
+};
